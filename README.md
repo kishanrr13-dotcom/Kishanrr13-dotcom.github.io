@@ -1,2 +1,2 @@
 # Kishanrr13-dotcom.github.io
-My phone review website
+My gadgets review website
