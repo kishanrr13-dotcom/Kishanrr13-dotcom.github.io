@@ -1,7 +1,7 @@
 /* ============ PowerG — shared site logic ============ */
 /* Product data now comes from a published Google Sheet (CSV).
    PASTE your published-CSV link below, between the quotes. */
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRFw_90WCARwDbgk_2gBIXbAz3cBNkc5udWZgZcNzPhkivAswT45IPc4bN7p-npmENfF6yHo9bL84d3/pub?gid=0&single=true&output=csv";
+const SHEET_CSV_URL = "PASTE_YOUR_GOOGLE_SHEET_CSV_LINK_HERE";
 
 let PHONE_DATA = [];
 
@@ -108,6 +108,7 @@ async function loadPhoneData(){
         currency: obj.currency || (region==='usa' ? '$' : '₹'),
         blurb: obj.blurb || '',
         description: obj.description || obj.blurb || '',
+        image: obj.image_url || '',
         specs: specs,
         url: 'phones/phone.html?slug=' + encodeURIComponent(obj.slug)
       };
@@ -499,7 +500,11 @@ function buildCardElement(p){
   const card = document.createElement('div');
   card.className = 'card';
   card.dataset.slug = p.slug; card.dataset.name = p.name; card.dataset.price = p.price; card.dataset.brand = p.brand;
+  const imgHtml = p.image
+    ? `<img src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.parentElement.innerHTML='📦'">`
+    : `📦`;
   card.innerHTML = `
+    <div class="card-image">${imgHtml}</div>
     <span class="tag">${p.region === 'usa' ? 'USA' : 'India'} · ${p.brand}</span>
     <h3><a href="${root()}${p.url}">${p.name}</a></h3>
     <p>${p.blurb}</p>
@@ -655,14 +660,20 @@ function renderPhoneDetail(){
   renderHeader();
 
   const backPage = p.region === 'usa' ? 'usa.html' : 'india.html';
+  const imgHtml = p.image
+    ? `<img src="${p.image}" alt="${p.name}" style="max-width:280px;margin:0 auto 10px;" onerror="this.style.display='none'">`
+    : `<div style="font-size:70px;">📦</div>`;
   el.innerHTML = `
-    <div class="detail-head">
-      <a class="back-link" href="../${backPage}">← Back to ${p.region==='usa'?'USA':'India'} phones</a>
+    <div class="detail-head" style="text-align:center;">
+      <div style="text-align:left;"><a class="back-link" href="../${backPage}">← Back to ${p.region==='usa'?'USA':'India'} phones</a></div>
+      ${imgHtml}
+      <div style="text-align:left;">
       <span class="tag">${p.region==='usa'?'USA':'India'} · ${p.brand}</span>
       <h1>${p.name}</h1>
       <div class="detail-price">${p.currency}${p.price.toLocaleString()}</div>
       <div class="detail-actions">
         <button class="icon-btn" id="detail-share-btn">Share this phone</button>
+      </div>
       </div>
     </div>
     <div class="spec-grid">
