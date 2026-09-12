@@ -1,18 +1,26 @@
-/* ============ Gadgetproof — shared site logic ============ */
+/* ============ PowerG — shared site logic ============ */
+/* Product data now comes from a published Google Sheet (CSV).
+   PASTE your published-CSV link below, between the quotes. */
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRFw_90WCARwDbgk_2gBIXbAz3cBNkc5udWZgZcNzPhkivAswT45IPc4bN7p-npmENfF6yHo9bL84d3/pub?gid=0&single=true&output=csv";
 
-const PHONE_DATA = [
-  {slug:"poco-m8-power-5g", name:"POCO M8 Power 5G", brand:"POCO", region:"india", price:24390, currency:"₹", blurb:"8000mAh battery, Snapdragon 4 Gen 4", url:"phones/poco-m8-power-5g.html"},
-  {slug:"oneplus-n6-5g", name:"OnePlus N6 5G", brand:"OnePlus", region:"india", price:24999, currency:"₹", blurb:"8000mAh, 45W Super Charging", url:"phones/oneplus-n6-5g.html"},
-  {slug:"iqoo-z10-turbo-pro", name:"iQOO Z10 Turbo Pro", brand:"iQOO", region:"india", price:23990, currency:"₹", blurb:"Gaming-focused mid-ranger", url:"phones/iqoo-z10-turbo-pro.html"},
-  {slug:"motorola-edge-70-fusion", name:"Motorola Edge 70 Fusion", brand:"Motorola", region:"india", price:29190, currency:"₹", blurb:"Slim design, balanced performance", url:"phones/motorola-edge-70-fusion.html"},
-  {slug:"realme-p4-pro", name:"realme P4 Pro", brand:"realme", region:"india", price:28999, currency:"₹", blurb:"Vibrant AMOLED, dual camera", url:"phones/realme-p4-pro.html"},
-  {slug:"iphone-18-pro-max", name:"iPhone 18 Pro Max", brand:"Apple", region:"usa", price:1299, currency:"$", blurb:"A19 Pro chip, titanium frame", url:"phones/iphone-18-pro-max.html"},
-  {slug:"galaxy-s26-ultra", name:"Samsung Galaxy S26 Ultra", brand:"Samsung", region:"usa", price:1399, currency:"$", blurb:"S Pen, Snapdragon 8 Elite Gen 5", url:"phones/galaxy-s26-ultra.html"},
-  {slug:"pixel-11-pro-xl", name:"Google Pixel 11 Pro XL", brand:"Google", region:"usa", price:1299, currency:"$", blurb:"48MP redesigned sensor, Tensor G6", url:"phones/pixel-11-pro-xl.html"},
-  {slug:"galaxy-z-fold8", name:"Samsung Galaxy Z Fold8", brand:"Samsung", region:"usa", price:1899, currency:"$", blurb:"New wide foldable form factor", url:"phones/galaxy-z-fold8.html"}
-];
+let PHONE_DATA = [];
 
 const GADGET_CATEGORIES = ["Phones","Earbuds","Tablets","Laptops","Cameras","TVs","Headphones","Washing Machines","Fans","Coolers","AC"];
+
+const CATEGORY_TILES = [
+  {icon:"📱", name:"Phones", live:true},
+  {icon:"🎧", name:"Earbuds", live:false},
+  {icon:"📲", name:"Tablets", live:false},
+  {icon:"💻", name:"Laptops", live:false},
+  {icon:"📷", name:"Cameras", live:false},
+  {icon:"📺", name:"TVs", live:false},
+  {icon:"🎙️", name:"Headphones", live:false},
+  {icon:"🧺", name:"Washing Machines", live:false},
+  {icon:"🌀", name:"Fans", live:false},
+  {icon:"🌬️", name:"Coolers", live:false},
+  {icon:"❄️", name:"Air Conditioners", live:false},
+  {icon:"🧊", name:"Refrigerators", live:false}
+];
 
 const LANG_INDIA = ["English","Hindi","Telugu","Tamil","Malayalam","Kannada","Marathi"];
 const LANG_USA = ["English","Spanish"];
@@ -49,11 +57,72 @@ function toast(msg){
   t._timer = setTimeout(()=>{ t.style.opacity = '0'; }, 2200);
 }
 
+/* ================= LOAD DATA FROM GOOGLE SHEET ================= */
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field=''; }
+      else if(c === '\n' || c === '\r'){
+        if(c === '\r' && text[i+1] === '\n') i++;
+        row.push(field); field='';
+        if(!(row.length===1 && row[0]==='')) rows.push(row);
+        row = [];
+      } else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+async function loadPhoneData(){
+  if(!SHEET_CSV_URL || SHEET_CSV_URL.indexOf('PASTE_YOUR') !== -1){
+    console.warn('PowerG: no Google Sheet link set yet in assets/site.js — catalog is empty.');
+    return [];
+  }
+  try{
+    const res = await fetch(SHEET_CSV_URL + (SHEET_CSV_URL.includes('?')?'&':'?') + '_=' + Date.now());
+    const text = await res.text();
+    const rows = parseCSV(text);
+    if(rows.length < 2) return [];
+    const header = rows[0].map(h=>h.trim().toLowerCase());
+    const data = rows.slice(1).filter(r=>r.length>1 && r[0] && r[0].trim()).map(r=>{
+      const obj = {};
+      header.forEach((h,idx)=> obj[h] = (r[idx]||'').trim());
+      const region = (obj.region||'india').toLowerCase().indexOf('usa')!==-1 ? 'usa' : 'india';
+      const specs = [1,2,3,4,5,6].map(n=>({label:obj['spec'+n+'_label'], value:obj['spec'+n+'_value']})).filter(s=>s.label && s.value);
+      return {
+        slug: obj.slug,
+        name: obj.name,
+        brand: obj.brand || 'Other',
+        region: region,
+        price: parseFloat(obj.price) || 0,
+        currency: obj.currency || (region==='usa' ? '$' : '₹'),
+        blurb: obj.blurb || '',
+        description: obj.description || obj.blurb || '',
+        specs: specs,
+        url: 'phones/phone.html?slug=' + encodeURIComponent(obj.slug)
+      };
+    }).filter(p=>p.slug && p.name);
+    return data;
+  } catch(err){
+    console.error('PowerG: could not load Google Sheet data', err);
+    return [];
+  }
+}
+
 /* ================= HEADER ================= */
 function renderHeader(){
   const el = document.getElementById('site-header');
   if(!el) return;
-  const r = root();
   const region = el.dataset.region || 'india';
   const langList = region === 'usa' ? LANG_USA : LANG_INDIA;
 
@@ -78,7 +147,7 @@ function renderHeader(){
     <div class="brandrow-inner">
       <div class="brand-title">Power<span class="g">G</span></div>
       <div class="brand-tag">Powerful Gadgets</div>
-      <div class="ad-slot">Ad space</div>
+      <div class="ad-slot"></div>
     </div>
   </div>
 
@@ -148,26 +217,27 @@ function renderHeader(){
   </div>
   `;
 
-  document.body.insertAdjacentHTML('beforeend', `
-    <div class="compare-bar" id="compare-bar">
-      <span>Compare:</span>
-      <div id="compare-chips" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
-      <button class="compare-go" id="compare-go">Compare Now</button>
-      <button class="compare-clear" id="compare-clear">Clear</button>
-    </div>
-    <div class="modal-overlay" id="compare-modal">
-      <div class="modal-box">
-        <button class="modal-close" id="compare-modal-close">✕</button>
-        <h2>Comparison</h2>
-        <div id="compare-table-wrap"></div>
+  if(!document.getElementById('compare-bar')){
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="compare-bar" id="compare-bar">
+        <span>Compare:</span>
+        <div id="compare-chips" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+        <button class="compare-go" id="compare-go">Compare Now</button>
+        <button class="compare-clear" id="compare-clear">Clear</button>
       </div>
-    </div>
-  `);
+      <div class="modal-overlay" id="compare-modal">
+        <div class="modal-box">
+          <button class="modal-close" id="compare-modal-close">✕</button>
+          <h2>Comparison</h2>
+          <div id="compare-table-wrap"></div>
+        </div>
+      </div>
+    `);
+  }
 
   wireHeaderEvents(region);
   startClock();
   renderAuth();
-  populateBrandSelect(region);
   renderCompareBar();
 }
 
@@ -175,7 +245,6 @@ function wireHeaderEvents(region){
   const q = (s)=>document.querySelector(s);
   const qa = (s)=>document.querySelectorAll(s);
 
-  // language
   q('#lang-toggle').onclick = ()=> q('#lang-menu').classList.toggle('open');
   qa('#lang-menu button').forEach(b=>b.onclick = ()=>{
     const lang = b.dataset.lang;
@@ -190,7 +259,6 @@ function wireHeaderEvents(region){
     }
   });
 
-  // nav dropdown toggles (desktop)
   const panels = ['price','gadgets','top'];
   panels.forEach(p=>{
     const btn = q('#nav-'+p+'-btn');
@@ -205,7 +273,6 @@ function wireHeaderEvents(region){
     }
   });
 
-  // price range apply (desktop + mobile)
   const applyRange = (minEl,maxEl)=>{
     const min = parseFloat(minEl.value)||0;
     const max = parseFloat(maxEl.value)||Infinity;
@@ -215,7 +282,6 @@ function wireHeaderEvents(region){
   if(q('#range-apply')) q('#range-apply').onclick = ()=> applyRange(q('#range-min'), q('#range-max'));
   if(q('#m-range-apply')) q('#m-range-apply').onclick = ()=> applyRange(q('#m-range-min'), q('#m-range-max'));
 
-  // gadgets category clicks
   qa('[data-cat]').forEach(b=>b.onclick = ()=>{
     if(b.dataset.cat === 'Phones'){
       window.location.href = root() + (region==='usa' ? 'usa.html' : 'india.html');
@@ -224,16 +290,13 @@ function wireHeaderEvents(region){
     }
   });
 
-  // top lists
   qa('#panel-top button[data-n]').forEach(b=>b.onclick = ()=> showTopN(parseInt(b.dataset.n)));
   if(q('#m-top5')) q('#m-top5').onclick = ()=>{ showTopN(5); closeMobileMenu(); };
   if(q('#m-top10')) q('#m-top10').onclick = ()=>{ showTopN(10); closeMobileMenu(); };
   if(q('#m-top15')) q('#m-top15').onclick = ()=>{ showTopN(15); closeMobileMenu(); };
 
-  // brand select
   if(q('#brand-select')) q('#brand-select').onchange = (e)=> filterByBrand(e.target.value);
 
-  // compare nav button -> scroll to compare bar / info
   if(q('#nav-compare-btn')) q('#nav-compare-btn').onclick = ()=>{
     if(getCompareList().length === 0) toast('Tick the compare box on any 2-3 phones first.');
     else openCompareModal();
@@ -244,7 +307,6 @@ function wireHeaderEvents(region){
     else openCompareModal();
   };
 
-  // mobile menu open/close
   if(q('#dots-btn')) q('#dots-btn').onclick = ()=>{
     q('#mobile-menu').classList.add('open');
     q('#gp-overlay').classList.add('open');
@@ -257,7 +319,6 @@ function wireHeaderEvents(region){
     closeMobileMenu();
   });
 
-  // search
   const doSearch = ()=>{
     const val = q('#gp-search').value.trim();
     if(!val) return;
@@ -270,7 +331,6 @@ function wireHeaderEvents(region){
   if(q('#gp-search-btn')) q('#gp-search-btn').onclick = doSearch;
   if(q('#gp-search')) q('#gp-search').addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(); });
 
-  // compare modal close
   if(q('#compare-modal-close')) q('#compare-modal-close').onclick = ()=> q('#compare-modal').classList.remove('open');
   if(q('#compare-go')) q('#compare-go').onclick = openCompareModal;
   if(q('#compare-clear')) q('#compare-clear').onclick = ()=>{ localStorage.removeItem('gp_compare'); renderCompareBar(); };
@@ -283,7 +343,6 @@ function closeMobileMenu(){
 
 function applyHindiNav(){
   const t = NAV_TEXT.Hindi;
-  const set = (id,txt)=>{ const e=document.getElementById(id); if(e) e.firstChild.textContent = txt+' '; };
   document.getElementById('nav-price-btn').innerHTML = t.price+' ▾';
   document.getElementById('nav-gadgets-btn').innerHTML = t.gadgets+' ▾';
   document.getElementById('nav-compare-btn').innerHTML = t.compare;
@@ -297,7 +356,7 @@ function applyEnglishNav(){
   document.getElementById('nav-top-btn').innerHTML = t.top+' ▾';
 }
 
-/* ================= CLOCK (auto, untouchable) ================= */
+/* ================= CLOCK ================= */
 function startClock(){
   const el = document.getElementById('gp-clock');
   if(!el) return;
@@ -312,7 +371,7 @@ function startClock(){
   setInterval(update, 30000);
 }
 
-/* ================= AUTH (client-side demo) ================= */
+/* ================= AUTH ================= */
 function renderAuth(){
   const el = document.getElementById('auth-wrap');
   if(!el) return;
@@ -359,25 +418,31 @@ function showTopN(n){
   cards.forEach((c,i)=>{ c.style.display = i<n ? '' : 'none'; });
   toast(`Showing top ${n}.`);
 }
-function populateBrandSelect(region){
-  const sel = document.getElementById('brand-select');
-  if(!sel) return;
+function populateAllBrandSelects(){
+  const region = currentRegion();
   const brands = [...new Set(PHONE_DATA.filter(p=>p.region===region).map(p=>p.brand))];
-  brands.forEach(b=>{
-    const o = document.createElement('option');
-    o.value = b; o.textContent = b;
-    sel.appendChild(o);
+  ['brand-select','filter-brand-select'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    sel.innerHTML = '<option value="">All brands</option>';
+    brands.forEach(b=>{
+      const o = document.createElement('option');
+      o.value = b; o.textContent = b;
+      sel.appendChild(o);
+    });
   });
 }
 function sortCards(order){
-  const grid = document.querySelector('.card-grid');
-  if(!grid) return;
-  const cards = Array.from(grid.querySelectorAll('.card'));
-  cards.sort((a,b)=>{
-    const pa = parseFloat(a.dataset.price), pb = parseFloat(b.dataset.price);
-    return order === 'low' ? pa-pb : pb-pa;
+  const grids = document.querySelectorAll('.card-grid');
+  grids.forEach(grid=>{
+    const cards = Array.from(grid.querySelectorAll('.card'));
+    if(!cards.length) return;
+    cards.sort((a,b)=>{
+      const pa = parseFloat(a.dataset.price), pb = parseFloat(b.dataset.price);
+      return order === 'low' ? pa-pb : pb-pa;
+    });
+    cards.forEach(c=>grid.appendChild(c));
   });
-  cards.forEach(c=>grid.appendChild(c));
 }
 
 /* ================= COMPARE ================= */
@@ -422,15 +487,27 @@ function openCompareModal(){
 
 /* ================= SHARE ================= */
 function shareItem(title, url){
-  const fullUrl = url;
   if(navigator.share){
-    navigator.share({title: title + ' — Gadgetproof', text: title + ' on Gadgetproof', url: fullUrl}).catch(()=>{});
+    navigator.share({title: title + ' — PowerG', text: title + ' on PowerG', url: url}).catch(()=>{});
   } else {
-    navigator.clipboard.writeText(fullUrl).then(()=> toast('Link copied to clipboard!'));
+    navigator.clipboard.writeText(url).then(()=> toast('Link copied to clipboard!'));
   }
 }
 
-/* ================= CARD ENHANCEMENT ================= */
+/* ================= CARD BUILDING ================= */
+function buildCardElement(p){
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.dataset.slug = p.slug; card.dataset.name = p.name; card.dataset.price = p.price; card.dataset.brand = p.brand;
+  card.innerHTML = `
+    <span class="tag">${p.region === 'usa' ? 'USA' : 'India'} · ${p.brand}</span>
+    <h3><a href="${root()}${p.url}">${p.name}</a></h3>
+    <p>${p.blurb}</p>
+    <div class="card-bottom"><div class="price">${p.currency}${p.price.toLocaleString()}</div></div>
+  `;
+  return card;
+}
+
 function enhanceCards(){
   document.querySelectorAll('.card[data-slug]').forEach(card=>{
     const slug = card.dataset.slug;
@@ -457,10 +534,152 @@ function enhanceCards(){
   renderCompareBar();
 }
 
+/* ================= CATEGORY GRID ================= */
+function renderCategoryGrid(){
+  const el = document.getElementById('category-grid');
+  if(!el) return;
+  el.innerHTML = CATEGORY_TILES.map(c=>`
+    <a class="category-tile" href="#" data-cat="${c.name}" data-live="${c.live}">
+      <div class="icon">${c.icon}</div>
+      <div class="name">${c.name}</div>
+      ${c.live ? '' : '<span class="soon">Coming soon</span>'}
+    </a>
+  `).join('');
+  el.querySelectorAll('.category-tile').forEach(t=>{
+    t.onclick = (e)=>{
+      e.preventDefault();
+      if(t.dataset.live === 'true'){
+        window.location.href = root() + 'india.html';
+      } else {
+        toast(t.dataset.cat + ' — coming soon. Tell us below if you need it sooner!');
+        document.getElementById('request-box')?.scrollIntoView({behavior:'smooth', block:'center'});
+      }
+    };
+  });
+}
+
+/* ================= ENDLESS SCROLL FEED (homepage) ================= */
+let feedIndex = 0;
+const FEED_BATCH = 4;
+function renderEndlessFeed(){
+  const el = document.getElementById('endless-feed');
+  if(!el) return;
+  feedIndex = 0;
+  el.innerHTML = '';
+  if(PHONE_DATA.length === 0){
+    el.innerHTML = '<p style="color:#7a6a5c;grid-column:1/-1;">No products yet — add rows to your Google Sheet and they will show up here automatically.</p>';
+    return;
+  }
+  let sentinel = document.getElementById('feed-sentinel');
+  if(!sentinel){
+    sentinel = document.createElement('div');
+    sentinel.id = 'feed-sentinel';
+    sentinel.className = 'feed-sentinel';
+    el.after(sentinel);
+  }
+
+  const loadMore = ()=>{
+    const next = PHONE_DATA.slice(feedIndex, feedIndex + FEED_BATCH);
+    if(next.length === 0){
+      renderRequestBox();
+      observer.disconnect();
+      return;
+    }
+    next.forEach(p=> el.appendChild(buildCardElement(p)));
+    feedIndex += FEED_BATCH;
+    enhanceCards();
+  };
+
+  const observer = new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{ if(entry.isIntersecting) loadMore(); });
+  }, {rootMargin:'200px'});
+  observer.observe(sentinel);
+}
+
+function renderRequestBox(){
+  if(document.getElementById('request-box')) return;
+  const box = document.createElement('div');
+  box.className = 'request-box';
+  box.id = 'request-box';
+  box.innerHTML = `
+    <h3>That's everything we've listed so far 🎉</h3>
+    <p>Looking for a specific gadget — phone, AC, fridge, laptop? Tell us and we'll add it.</p>
+    <form id="request-form">
+      <input type="text" id="request-input" placeholder="e.g. iPhone 17, Samsung fridge..." required>
+      <button type="submit">Request</button>
+    </form>
+  `;
+  document.getElementById('endless-feed').after(box);
+  document.getElementById('request-form').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const val = document.getElementById('request-input').value.trim();
+    if(!val) return;
+    window.location.href = 'mailto:youremail@example.com?subject=Gadget request&body=' + encodeURIComponent('Please add: ' + val);
+    toast('Thanks! Request noted.');
+    document.getElementById('request-input').value = '';
+  });
+}
+
+/* ================= LISTING FEED (india.html / usa.html) ================= */
+function renderListingFeed(){
+  const el = document.getElementById('listing-feed');
+  if(!el) return;
+  const region = el.dataset.region;
+  const items = PHONE_DATA.filter(p=>p.region===region).sort((a,b)=>a.price-b.price);
+  el.innerHTML = '';
+  if(items.length === 0){
+    el.innerHTML = '<p style="color:#7a6a5c;grid-column:1/-1;">No phones added yet for this region. Add a row to your Google Sheet with region = ' + region + ' and it will appear here.</p>';
+    return;
+  }
+  items.forEach(p=> el.appendChild(buildCardElement(p)));
+  enhanceCards();
+}
+
+/* ================= PHONE DETAIL (phones/phone.html) ================= */
+function renderPhoneDetail(){
+  const el = document.getElementById('detail-content');
+  if(!el) return;
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('slug');
+  const p = PHONE_DATA.find(x=>x.slug === slug);
+
+  if(!p){
+    el.innerHTML = `<div class="detail-head"><h1>Product not found</h1><p style="color:#7a6a5c;">This link may be old, or the row hasn't been added to the Google Sheet yet.</p></div>`;
+    return;
+  }
+
+  document.title = p.name + ' Price & Specs | PowerG';
+  const header = document.getElementById('site-header');
+  header.dataset.region = p.region;
+  header.dataset.pageid = p.slug;
+  renderHeader();
+
+  const backPage = p.region === 'usa' ? 'usa.html' : 'india.html';
+  el.innerHTML = `
+    <div class="detail-head">
+      <a class="back-link" href="../${backPage}">← Back to ${p.region==='usa'?'USA':'India'} phones</a>
+      <span class="tag">${p.region==='usa'?'USA':'India'} · ${p.brand}</span>
+      <h1>${p.name}</h1>
+      <div class="detail-price">${p.currency}${p.price.toLocaleString()}</div>
+      <div class="detail-actions">
+        <button class="icon-btn" id="detail-share-btn">Share this phone</button>
+      </div>
+    </div>
+    <div class="spec-grid">
+      ${p.specs.length ? p.specs.map(s=>`<div class="spec-box"><div class="label">${s.label}</div><div class="val">${s.value}</div></div>`).join('') : '<p style="color:#7a6a5c;padding:0 10px;">No detailed specs added yet.</p>'}
+    </div>
+    <div class="detail-body">
+      <p>${p.description}</p>
+    </div>
+  `;
+  document.getElementById('detail-share-btn').onclick = ()=> shareItem(p.name, window.location.href);
+}
+
 /* ================= SUGGESTIONS STRIP ================= */
 function renderSuggestions(){
   const el = document.getElementById('suggestions-strip');
   if(!el) return;
+  if(PHONE_DATA.length === 0){ el.innerHTML=''; return; }
   const mySlug = pageId();
   const pool = PHONE_DATA.filter(p=>p.slug !== mySlug);
   const picks = pool.sort(()=>0.5-Math.random()).slice(0,6);
@@ -525,7 +744,7 @@ function renderSiteReview(){
     `).join('') : '<p style="color:#7a6a5c;font-size:14px;">No reviews yet.</p>';
   };
   el.innerHTML = `
-    <div class="section-title">Rate Gadgetproof</div>
+    <div class="section-title">Rate PowerG</div>
     <div class="comment-form">
       <input type="text" id="sr-name" placeholder="Your name">
       <select id="sr-stars" style="width:100%;padding:9px;border:1px solid #f0ddc8;border-radius:8px;margin-bottom:8px;">
@@ -558,36 +777,36 @@ function renderSiteReview(){
 function renderFooter(){
   const el = document.getElementById('site-footer');
   if(!el) return;
-  el.innerHTML = `Gadgetproof — independent gadget launch coverage. Specs and prices are collected from public sources and may change.`;
+  el.innerHTML = `PowerG — independent gadget launch coverage. Specs and prices are collected from public sources and may change.`;
   el.setAttribute('style','border-top:1px solid #f0ddc8;padding:26px 20px;color:#7a6a5c;font-size:13px;text-align:center;margin-top:20px;display:block;');
 }
 
-/* ================= FILTER/SORT BAR (listing pages) ================= */
+/* ================= FILTER/SORT BAR ================= */
 function wireFilterSortBar(){
   const sortSel = document.getElementById('sort-select');
   if(sortSel) sortSel.onchange = (e)=> sortCards(e.target.value);
+  populateAllBrandSelects();
   const brandFilterTop = document.getElementById('filter-brand-select');
-  if(brandFilterTop){
-    const region = currentRegion();
-    const brands = [...new Set(PHONE_DATA.filter(p=>p.region===region).map(p=>p.brand))];
-    brands.forEach(b=>{
-      const o=document.createElement('option'); o.value=b; o.textContent=b; brandFilterTop.appendChild(o);
-    });
-    brandFilterTop.onchange = (e)=> filterByBrand(e.target.value);
-  }
+  if(brandFilterTop) brandFilterTop.onchange = (e)=> filterByBrand(e.target.value);
 }
 
 /* ================= INIT ================= */
-document.addEventListener('DOMContentLoaded', ()=>{
+document.addEventListener('DOMContentLoaded', async ()=>{
   renderHeader();
   renderFooter();
-  enhanceCards();
+
+  PHONE_DATA = await loadPhoneData();
+
+  renderPhoneDetail();
+  renderCategoryGrid();
+  renderEndlessFeed();
+  renderListingFeed();
   wireFilterSortBar();
+  enhanceCards();
   renderSuggestions();
   renderComments();
   renderSiteReview();
 
-  // handle ?q= search param on load
   const params = new URLSearchParams(window.location.search);
   if(params.get('q')) filterCardsByName(params.get('q'));
   if(params.get('min') || params.get('max')){
