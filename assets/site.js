@@ -1,7 +1,7 @@
 /* ============ PowerG — shared site logic ============ */
 /* Product data now comes from a published Google Sheet (CSV).
    PASTE your published-CSV link below, between the quotes. */
-const SHEET_CSV_URL = "PASTE_YOUR_GOOGLE_SHEET_CSV_LINK_HERE";
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRFw_90WCARwDbgk_2gBIXbAz3cBNkc5udWZgZcNzPhkivAswT45IPc4bN7p-npmENfF6yHo9bL84d3/pub?gid=0&single=true&output=csv";
 
 let PHONE_DATA = [];
 
