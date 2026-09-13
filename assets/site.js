@@ -1,26 +1,16 @@
-/* ============ PowerG — shared site logic ============ */
-/* Product data now comes from a published Google Sheet (CSV).
+/* ============ eLoot — shared site logic ============ */
+/* All product data comes from a published Google Sheet (CSV).
    PASTE your published-CSV link below, between the quotes. */
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRFw_90WCARwDbgk_2gBIXbAz3cBNkc5udWZgZcNzPhkivAswT45IPc4bN7p-npmENfF6yHo9bL84d3/pub?gid=0&single=true&output=csv";
+const SHEET_CSV_URL = "PASTE_YOUR_GOOGLE_SHEET_CSV_LINK_HERE";
 
-let PHONE_DATA = [];
+let GADGET_DATA = [];
 
-const GADGET_CATEGORIES = ["Phones","Earbuds","Tablets","Laptops","Cameras","TVs","Headphones","Washing Machines","Fans","Coolers","AC"];
+const CATEGORY_LIST = ["Phones","Earbuds","Tablets","Laptops","Cameras","TVs","Headphones","Washing Machines","Fans","Coolers","Air Conditioners","Refrigerators"];
 
-const CATEGORY_TILES = [
-  {icon:"📱", name:"Phones", live:true},
-  {icon:"🎧", name:"Earbuds", live:false},
-  {icon:"📲", name:"Tablets", live:false},
-  {icon:"💻", name:"Laptops", live:false},
-  {icon:"📷", name:"Cameras", live:false},
-  {icon:"📺", name:"TVs", live:false},
-  {icon:"🎙️", name:"Headphones", live:false},
-  {icon:"🧺", name:"Washing Machines", live:false},
-  {icon:"🌀", name:"Fans", live:false},
-  {icon:"🌬️", name:"Coolers", live:false},
-  {icon:"❄️", name:"Air Conditioners", live:false},
-  {icon:"🧊", name:"Refrigerators", live:false}
-];
+const CATEGORY_ICONS = {
+  "Phones":"📱","Earbuds":"🎧","Tablets":"📲","Laptops":"💻","Cameras":"📷","TVs":"📺",
+  "Headphones":"🎙️","Washing Machines":"🧺","Fans":"🌀","Coolers":"🌬️","Air Conditioners":"❄️","Refrigerators":"🧊"
+};
 
 const LANG_INDIA = ["English","Hindi","Telugu","Tamil","Malayalam","Kannada","Marathi"];
 const LANG_USA = ["English","Spanish"];
@@ -83,9 +73,9 @@ function parseCSV(text){
   return rows;
 }
 
-async function loadPhoneData(){
+async function loadGadgetData(){
   if(!SHEET_CSV_URL || SHEET_CSV_URL.indexOf('PASTE_YOUR') !== -1){
-    console.warn('PowerG: no Google Sheet link set yet in assets/site.js — catalog is empty.');
+    console.warn('eLoot: no Google Sheet link set yet in assets/site.js — catalog is empty.');
     return [];
   }
   try{
@@ -99,23 +89,27 @@ async function loadPhoneData(){
       header.forEach((h,idx)=> obj[h] = (r[idx]||'').trim());
       const region = (obj.region||'india').toLowerCase().indexOf('usa')!==-1 ? 'usa' : 'india';
       const specs = [1,2,3,4,5,6].map(n=>({label:obj['spec'+n+'_label'], value:obj['spec'+n+'_value']})).filter(s=>s.label && s.value);
+      const images = [obj.image_url, obj.image_url2, obj.image_url3, obj.image_url4].filter(Boolean);
       return {
         slug: obj.slug,
         name: obj.name,
         brand: obj.brand || 'Other',
+        category: obj.category || 'Phones',
         region: region,
         price: parseFloat(obj.price) || 0,
         currency: obj.currency || (region==='usa' ? '$' : '₹'),
         blurb: obj.blurb || '',
         description: obj.description || obj.blurb || '',
-        image: obj.image_url || '',
+        images: images,
+        image: images[0] || '',
         specs: specs,
-        url: 'phones/phone.html?slug=' + encodeURIComponent(obj.slug)
+        affiliateUrl: obj.affiliate_url || '',
+        url: 'products/product.html?slug=' + encodeURIComponent(obj.slug)
       };
     }).filter(p=>p.slug && p.name);
     return data;
   } catch(err){
-    console.error('PowerG: could not load Google Sheet data', err);
+    console.error('eLoot: could not load Google Sheet data', err);
     return [];
   }
 }
@@ -146,15 +140,15 @@ function renderHeader(){
 
   <div class="brandrow">
     <div class="brandrow-inner">
-      <div class="brand-title">Power<span class="g">G</span></div>
-      <div class="brand-tag">Powerful Gadgets</div>
+      <a href="${root()}index.html" class="brand-title">e<span class="g">Loot</span></a>
+      <div class="brand-tag">Electronics Loot</div>
       <div class="ad-slot"></div>
     </div>
   </div>
 
   <div class="searchbar-row">
     <div class="searchbar">
-      <input type="text" id="gp-search" placeholder="Search phones, brands...">
+      <input type="text" id="gp-search" placeholder="Search phones, laptops, brands...">
       <button id="gp-search-btn">Search</button>
     </div>
   </div>
@@ -178,7 +172,7 @@ function renderHeader(){
         <button id="nav-gadgets-btn">${NAV_TEXT.English.gadgets} ▾</button>
         <div class="nav-panel" id="panel-gadgets">
           <div class="gadgets-grid">
-            ${GADGET_CATEGORIES.map(c=>`<button data-cat="${c}">${c}</button>`).join('')}
+            ${CATEGORY_LIST.map(c=>`<button data-cat="${c}">${c}</button>`).join('')}
           </div>
         </div>
       </div>
@@ -209,12 +203,12 @@ function renderHeader(){
     </div>
     <button id="m-range-apply" style="background:#e8491d;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:700;">Apply</button>
     <h4>Gadgets</h4>
-    ${GADGET_CATEGORIES.map(c=>`<button data-cat="${c}" class="m-cat">${c}</button>`).join('')}
+    ${CATEGORY_LIST.map(c=>`<button data-cat="${c}" class="m-cat">${c}</button>`).join('')}
     <h4>More</h4>
     <button id="m-compare-btn">Compare</button>
-    <button id="m-top5">Top 5 Phones</button>
-    <button id="m-top10">Top 10 Phones</button>
-    <button id="m-top15">Top 15 Phones</button>
+    <button id="m-top5">Top 5</button>
+    <button id="m-top10">Top 10</button>
+    <button id="m-top15">Top 15</button>
   </div>
   `;
 
@@ -284,11 +278,7 @@ function wireHeaderEvents(region){
   if(q('#m-range-apply')) q('#m-range-apply').onclick = ()=> applyRange(q('#m-range-min'), q('#m-range-max'));
 
   qa('[data-cat]').forEach(b=>b.onclick = ()=>{
-    if(b.dataset.cat === 'Phones'){
-      window.location.href = root() + (region==='usa' ? 'usa.html' : 'india.html');
-    } else {
-      toast(b.dataset.cat + ' section coming soon.');
-    }
+    window.location.href = root() + 'category.html?cat=' + encodeURIComponent(b.dataset.cat);
   });
 
   qa('#panel-top button[data-n]').forEach(b=>b.onclick = ()=> showTopN(parseInt(b.dataset.n)));
@@ -299,12 +289,12 @@ function wireHeaderEvents(region){
   if(q('#brand-select')) q('#brand-select').onchange = (e)=> filterByBrand(e.target.value);
 
   if(q('#nav-compare-btn')) q('#nav-compare-btn').onclick = ()=>{
-    if(getCompareList().length === 0) toast('Tick the compare box on any 2-3 phones first.');
+    if(getCompareList().length === 0) toast('Tick the compare box on any 2-3 products first.');
     else openCompareModal();
   };
   if(q('#m-compare-btn')) q('#m-compare-btn').onclick = ()=>{
     closeMobileMenu();
-    if(getCompareList().length === 0) toast('Tick the compare box on any 2-3 phones first.');
+    if(getCompareList().length === 0) toast('Tick the compare box on any 2-3 products first.');
     else openCompareModal();
   };
 
@@ -315,19 +305,13 @@ function wireHeaderEvents(region){
   if(q('#mobile-close')) q('#mobile-close').onclick = closeMobileMenu;
   if(q('#gp-overlay')) q('#gp-overlay').onclick = closeMobileMenu;
   qa('.m-cat').forEach(b=>b.onclick = ()=>{
-    if(b.dataset.cat === 'Phones'){ window.location.href = root() + (region==='usa'?'usa.html':'india.html'); }
-    else toast(b.dataset.cat + ' section coming soon.');
-    closeMobileMenu();
+    window.location.href = root() + 'category.html?cat=' + encodeURIComponent(b.dataset.cat);
   });
 
   const doSearch = ()=>{
     const val = q('#gp-search').value.trim();
     if(!val) return;
-    if(document.querySelector('.card-grid')){
-      filterCardsByName(val);
-    } else {
-      window.location.href = root() + (region==='usa'?'usa.html':'india.html') + '?q=' + encodeURIComponent(val);
-    }
+    window.location.href = root() + 'search.html?q=' + encodeURIComponent(val);
   };
   if(q('#gp-search-btn')) q('#gp-search-btn').onclick = doSearch;
   if(q('#gp-search')) q('#gp-search').addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(); });
@@ -400,7 +384,7 @@ function filterCardsByPrice(min,max){
     const p = parseFloat(c.dataset.price);
     c.style.display = (p>=min && p<=max) ? '' : 'none';
   });
-  toast(`Showing phones in this price range.`);
+  toast(`Showing products in this price range.`);
 }
 function filterByBrand(brand){
   document.querySelectorAll('.card').forEach(c=>{
@@ -419,9 +403,9 @@ function showTopN(n){
   cards.forEach((c,i)=>{ c.style.display = i<n ? '' : 'none'; });
   toast(`Showing top ${n}.`);
 }
-function populateAllBrandSelects(){
-  const region = currentRegion();
-  const brands = [...new Set(PHONE_DATA.filter(p=>p.region===region).map(p=>p.brand))];
+function populateAllBrandSelects(list){
+  const source = list || GADGET_DATA;
+  const brands = [...new Set(source.map(p=>p.brand))];
   ['brand-select','filter-brand-select'].forEach(id=>{
     const sel = document.getElementById(id);
     if(!sel) return;
@@ -452,7 +436,7 @@ function toggleCompare(slug){
   let list = getCompareList();
   if(list.includes(slug)) list = list.filter(s=>s!==slug);
   else {
-    if(list.length>=3){ toast('You can compare up to 3 phones.'); return; }
+    if(list.length>=3){ toast('You can compare up to 3 products.'); return; }
     list.push(slug);
   }
   localStorage.setItem('gp_compare', JSON.stringify(list));
@@ -466,7 +450,7 @@ function renderCompareBar(){
   bar.classList.add('open');
   const chipsWrap = document.getElementById('compare-chips');
   chipsWrap.innerHTML = list.map(slug=>{
-    const p = PHONE_DATA.find(x=>x.slug===slug);
+    const p = GADGET_DATA.find(x=>x.slug===slug);
     return p ? `<span class="chip">${p.name}</span>` : '';
   }).join('');
   document.querySelectorAll('.compare-check input').forEach(cb=>{
@@ -475,13 +459,13 @@ function renderCompareBar(){
 }
 function openCompareModal(){
   const list = getCompareList();
-  const phones = list.map(s=>PHONE_DATA.find(p=>p.slug===s)).filter(Boolean);
+  const items = list.map(s=>GADGET_DATA.find(p=>p.slug===s)).filter(Boolean);
   const wrap = document.getElementById('compare-table-wrap');
   wrap.innerHTML = `<table class="compare-table">
-    <tr><th>Phone</th>${phones.map(p=>`<th>${p.name}</th>`).join('')}</tr>
-    <tr><td>Brand</td>${phones.map(p=>`<td>${p.brand}</td>`).join('')}</tr>
-    <tr><td>Price</td>${phones.map(p=>`<td>${p.currency}${p.price.toLocaleString()}</td>`).join('')}</tr>
-    <tr><td>Highlight</td>${phones.map(p=>`<td>${p.blurb}</td>`).join('')}</tr>
+    <tr><th>Product</th>${items.map(p=>`<th>${p.name}</th>`).join('')}</tr>
+    <tr><td>Brand</td>${items.map(p=>`<td>${p.brand}</td>`).join('')}</tr>
+    <tr><td>Price</td>${items.map(p=>`<td>${p.currency}${p.price.toLocaleString()}</td>`).join('')}</tr>
+    <tr><td>Highlight</td>${items.map(p=>`<td>${p.blurb}</td>`).join('')}</tr>
   </table>`;
   document.getElementById('compare-modal').classList.add('open');
 }
@@ -489,7 +473,7 @@ function openCompareModal(){
 /* ================= SHARE ================= */
 function shareItem(title, url){
   if(navigator.share){
-    navigator.share({title: title + ' — PowerG', text: title + ' on PowerG', url: url}).catch(()=>{});
+    navigator.share({title: title + ' — eLoot', text: title + ' on eLoot', url: url}).catch(()=>{});
   } else {
     navigator.clipboard.writeText(url).then(()=> toast('Link copied to clipboard!'));
   }
@@ -502,10 +486,10 @@ function buildCardElement(p){
   card.dataset.slug = p.slug; card.dataset.name = p.name; card.dataset.price = p.price; card.dataset.brand = p.brand;
   const imgHtml = p.image
     ? `<img src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.parentElement.innerHTML='📦'">`
-    : `📦`;
+    : (CATEGORY_ICONS[p.category] || '📦');
   card.innerHTML = `
     <div class="card-image">${imgHtml}</div>
-    <span class="tag">${p.region === 'usa' ? 'USA' : 'India'} · ${p.brand}</span>
+    <span class="tag">${p.category} · ${p.brand}</span>
     <h3><a href="${root()}${p.url}">${p.name}</a></h3>
     <p>${p.blurb}</p>
     <div class="card-bottom"><div class="price">${p.currency}${p.price.toLocaleString()}</div></div>
@@ -531,7 +515,7 @@ function enhanceCards(){
     actions.querySelector('.compare-input').onclick = (e)=>{ e.preventDefault(); toggleCompare(slug); };
     actions.querySelector('.share-btn').onclick = (e)=>{
       e.preventDefault(); e.stopPropagation();
-      const p = PHONE_DATA.find(x=>x.slug===slug);
+      const p = GADGET_DATA.find(x=>x.slug===slug);
       const fullUrl = p ? new URL(root() + p.url, window.location.href).href : window.location.href;
       shareItem(name, fullUrl);
     };
@@ -539,28 +523,16 @@ function enhanceCards(){
   renderCompareBar();
 }
 
-/* ================= CATEGORY GRID ================= */
+/* ================= CATEGORY GRID (homepage) ================= */
 function renderCategoryGrid(){
   const el = document.getElementById('category-grid');
   if(!el) return;
-  el.innerHTML = CATEGORY_TILES.map(c=>`
-    <a class="category-tile" href="#" data-cat="${c.name}" data-live="${c.live}">
-      <div class="icon">${c.icon}</div>
-      <div class="name">${c.name}</div>
-      ${c.live ? '' : '<span class="soon">Coming soon</span>'}
+  el.innerHTML = CATEGORY_LIST.map(c=>`
+    <a class="category-tile" href="${root()}category.html?cat=${encodeURIComponent(c)}">
+      <div class="icon">${CATEGORY_ICONS[c]}</div>
+      <div class="name">${c}</div>
     </a>
   `).join('');
-  el.querySelectorAll('.category-tile').forEach(t=>{
-    t.onclick = (e)=>{
-      e.preventDefault();
-      if(t.dataset.live === 'true'){
-        window.location.href = root() + 'india.html';
-      } else {
-        toast(t.dataset.cat + ' — coming soon. Tell us below if you need it sooner!');
-        document.getElementById('request-box')?.scrollIntoView({behavior:'smooth', block:'center'});
-      }
-    };
-  });
 }
 
 /* ================= ENDLESS SCROLL FEED (homepage) ================= */
@@ -571,7 +543,7 @@ function renderEndlessFeed(){
   if(!el) return;
   feedIndex = 0;
   el.innerHTML = '';
-  if(PHONE_DATA.length === 0){
+  if(GADGET_DATA.length === 0){
     el.innerHTML = '<p style="color:#7a6a5c;grid-column:1/-1;">No products yet — add rows to your Google Sheet and they will show up here automatically.</p>';
     return;
   }
@@ -584,7 +556,7 @@ function renderEndlessFeed(){
   }
 
   const loadMore = ()=>{
-    const next = PHONE_DATA.slice(feedIndex, feedIndex + FEED_BATCH);
+    const next = GADGET_DATA.slice(feedIndex, feedIndex + FEED_BATCH);
     if(next.length === 0){
       renderRequestBox();
       observer.disconnect();
@@ -625,55 +597,122 @@ function renderRequestBox(){
   });
 }
 
-/* ================= LISTING FEED (india.html / usa.html) ================= */
+/* ================= LISTING FEED (india.html / usa.html — Phones only) ================= */
 function renderListingFeed(){
   const el = document.getElementById('listing-feed');
   if(!el) return;
   const region = el.dataset.region;
-  const items = PHONE_DATA.filter(p=>p.region===region).sort((a,b)=>a.price-b.price);
+  const cat = el.dataset.category || null;
+  let items = GADGET_DATA.filter(p=>p.region===region);
+  if(cat) items = items.filter(p=>p.category === cat);
+  items.sort((a,b)=>a.price-b.price);
   el.innerHTML = '';
   if(items.length === 0){
     el.innerHTML = '<p style="color:#7a6a5c;grid-column:1/-1;">No phones added yet for this region. Add a row to your Google Sheet with region = ' + region + ' and it will appear here.</p>';
     return;
   }
   items.forEach(p=> el.appendChild(buildCardElement(p)));
+  populateAllBrandSelects(items);
   enhanceCards();
 }
 
-/* ================= PHONE DETAIL (phones/phone.html) ================= */
-function renderPhoneDetail(){
+/* ================= CATEGORY PAGE (category.html?cat=) ================= */
+function renderCategoryPage(){
+  const el = document.getElementById('category-feed');
+  if(!el) return;
+  const params = new URLSearchParams(window.location.search);
+  const cat = params.get('cat') || 'Phones';
+  document.title = cat + ' — Best Picks | eLoot';
+  const titleEl = document.getElementById('category-title');
+  if(titleEl) titleEl.textContent = 'Best ' + cat + ', 2026';
+  const icon = document.getElementById('category-icon');
+  if(icon) icon.textContent = CATEGORY_ICONS[cat] || '📦';
+
+  const items = GADGET_DATA.filter(p=>p.category === cat).sort((a,b)=>a.price-b.price);
+  el.innerHTML = '';
+  if(items.length === 0){
+    el.innerHTML = `<p style="color:#7a6a5c;grid-column:1/-1;">No ${cat.toLowerCase()} added yet. Add a row to your Google Sheet with category = ${cat} and it will show up here automatically.</p>`;
+    return;
+  }
+  items.forEach(p=> el.appendChild(buildCardElement(p)));
+  populateAllBrandSelects(items);
+  enhanceCards();
+}
+
+/* ================= SEARCH RESULTS (search.html?q=) ================= */
+function renderSearchPage(){
+  const el = document.getElementById('search-feed');
+  if(!el) return;
+  const params = new URLSearchParams(window.location.search);
+  const q = (params.get('q') || '').trim();
+  const titleEl = document.getElementById('search-title');
+  if(titleEl) titleEl.textContent = q ? `Results for "${q}"` : 'Search products';
+  const box = document.getElementById('gp-search');
+  if(box) box.value = q;
+
+  if(!q){ el.innerHTML = '<p style="color:#7a6a5c;grid-column:1/-1;">Type something in the search bar above.</p>'; return; }
+
+  const term = q.toLowerCase();
+  const items = GADGET_DATA.filter(p=>
+    p.name.toLowerCase().includes(term) ||
+    p.brand.toLowerCase().includes(term) ||
+    p.category.toLowerCase().includes(term)
+  );
+  el.innerHTML = '';
+  if(items.length === 0){
+    el.innerHTML = `<p style="color:#7a6a5c;grid-column:1/-1;">No results for "${q}" yet. Add a matching product to your Google Sheet and it will show up here.</p>`;
+    return;
+  }
+  items.forEach(p=> el.appendChild(buildCardElement(p)));
+  enhanceCards();
+}
+
+/* ================= PRODUCT DETAIL (products/product.html?slug=) ================= */
+let carouselIndex = 0;
+function renderProductDetail(){
   const el = document.getElementById('detail-content');
   if(!el) return;
   const params = new URLSearchParams(window.location.search);
   const slug = params.get('slug');
-  const p = PHONE_DATA.find(x=>x.slug === slug);
+  const p = GADGET_DATA.find(x=>x.slug === slug);
 
   if(!p){
     el.innerHTML = `<div class="detail-head"><h1>Product not found</h1><p style="color:#7a6a5c;">This link may be old, or the row hasn't been added to the Google Sheet yet.</p></div>`;
     return;
   }
 
-  document.title = p.name + ' Price & Specs | PowerG';
+  document.title = p.name + ' Price & Specs | eLoot';
   const header = document.getElementById('site-header');
   header.dataset.region = p.region;
   header.dataset.pageid = p.slug;
   renderHeader();
 
-  const backPage = p.region === 'usa' ? 'usa.html' : 'india.html';
-  const imgHtml = p.image
-    ? `<img src="${p.image}" alt="${p.name}" style="max-width:280px;margin:0 auto 10px;" onerror="this.style.display='none'">`
-    : `<div style="font-size:70px;">📦</div>`;
+  carouselIndex = 0;
+  const images = p.images.length ? p.images : [];
+  const carouselHtml = images.length ? `
+    <div class="carousel">
+      <div class="carousel-main">
+        <img id="carousel-img" src="${images[0]}" alt="${p.name}" onerror="this.src='';this.alt='Image not available';">
+        ${images.length>1 ? `<button class="carousel-arrow left" id="carousel-prev">‹</button><button class="carousel-arrow right" id="carousel-next">›</button>` : ''}
+      </div>
+      ${images.length>1 ? `<div class="carousel-dots">${images.map((_,i)=>`<span class="dot${i===0?' active':''}" data-i="${i}"></span>`).join('')}</div>` : ''}
+    </div>
+  ` : `<div class="carousel"><div class="carousel-main" style="font-size:70px;">${CATEGORY_ICONS[p.category]||'📦'}</div></div>`;
+
+  const buyBtn = p.affiliateUrl
+    ? `<a class="buy-now-btn" href="${p.affiliateUrl}" target="_blank" rel="noopener sponsored">Buy Now</a>`
+    : `<button class="buy-now-btn" disabled style="opacity:.5;cursor:not-allowed;">Buy Now (link coming soon)</button>`;
+
   el.innerHTML = `
-    <div class="detail-head" style="text-align:center;">
-      <div style="text-align:left;"><a class="back-link" href="../${backPage}">← Back to ${p.region==='usa'?'USA':'India'} phones</a></div>
-      ${imgHtml}
-      <div style="text-align:left;">
-      <span class="tag">${p.region==='usa'?'USA':'India'} · ${p.brand}</span>
+    <div class="detail-head">
+      <a class="back-link" href="../category.html?cat=${encodeURIComponent(p.category)}">← Back to ${p.category}</a>
+      ${carouselHtml}
+      <span class="tag">${p.category} · ${p.brand}</span>
       <h1>${p.name}</h1>
       <div class="detail-price">${p.currency}${p.price.toLocaleString()}</div>
       <div class="detail-actions">
-        <button class="icon-btn" id="detail-share-btn">Share this phone</button>
-      </div>
+        ${buyBtn}
+        <button class="icon-btn" id="detail-share-btn">Share</button>
       </div>
     </div>
     <div class="spec-grid">
@@ -684,20 +723,50 @@ function renderPhoneDetail(){
     </div>
   `;
   document.getElementById('detail-share-btn').onclick = ()=> shareItem(p.name, window.location.href);
+
+  if(images.length > 1){
+    const imgEl = document.getElementById('carousel-img');
+    const dots = document.querySelectorAll('.carousel-dots .dot');
+    const show = (i)=>{
+      carouselIndex = (i + images.length) % images.length;
+      imgEl.src = images[carouselIndex];
+      dots.forEach((d,di)=> d.classList.toggle('active', di===carouselIndex));
+    };
+    document.getElementById('carousel-prev').onclick = ()=> show(carouselIndex - 1);
+    document.getElementById('carousel-next').onclick = ()=> show(carouselIndex + 1);
+    dots.forEach(d=> d.onclick = ()=> show(parseInt(d.dataset.i)));
+  }
+
+  renderAccessories(p);
+}
+
+function renderAccessories(p){
+  const el = document.getElementById('accessories-strip');
+  if(!el) return;
+  const items = GADGET_DATA.filter(x=>x.category === 'Accessories').slice(0,6);
+  if(items.length === 0){ el.innerHTML=''; return; }
+  el.innerHTML = `<div class="section-title">Complete the set</div>
+    <div class="suggest-strip">
+      ${items.map(x=>`<a class="suggest-card" href="${root()}${x.url}">
+        <div class="src">${x.brand}</div>
+        <div class="nm">${x.name}</div>
+        <div class="pr">${x.currency}${x.price.toLocaleString()}</div>
+      </a>`).join('')}
+    </div>`;
 }
 
 /* ================= SUGGESTIONS STRIP ================= */
 function renderSuggestions(){
   const el = document.getElementById('suggestions-strip');
   if(!el) return;
-  if(PHONE_DATA.length === 0){ el.innerHTML=''; return; }
+  if(GADGET_DATA.length === 0){ el.innerHTML=''; return; }
   const mySlug = pageId();
-  const pool = PHONE_DATA.filter(p=>p.slug !== mySlug);
+  const pool = GADGET_DATA.filter(p=>p.slug !== mySlug);
   const picks = pool.sort(()=>0.5-Math.random()).slice(0,6);
   el.innerHTML = `<div class="section-title">You might also like</div>
     <div class="suggest-strip">
       ${picks.map(p=>`<a class="suggest-card" href="${root()}${p.url}">
-        <div class="src">${p.region==='usa'?'USA':'India'}</div>
+        <div class="src">${p.category}</div>
         <div class="nm">${p.name}</div>
         <div class="pr">${p.currency}${p.price.toLocaleString()}</div>
       </a>`).join('')}
@@ -723,7 +792,7 @@ function renderComments(){
     <div class="section-title">Comments & Reviews</div>
     <div class="comment-form">
       <input type="text" id="c-name" placeholder="Your name">
-      <textarea id="c-text" placeholder="Share your experience with this phone..."></textarea>
+      <textarea id="c-text" placeholder="Share your experience with this product..."></textarea>
       <button id="c-submit">Post comment</button>
     </div>
     <div id="comments-list" style="margin-top:14px;"></div>
@@ -755,7 +824,7 @@ function renderSiteReview(){
     `).join('') : '<p style="color:#7a6a5c;font-size:14px;">No reviews yet.</p>';
   };
   el.innerHTML = `
-    <div class="section-title">Rate PowerG</div>
+    <div class="section-title">Rate eLoot</div>
     <div class="comment-form">
       <input type="text" id="sr-name" placeholder="Your name">
       <select id="sr-stars" style="width:100%;padding:9px;border:1px solid #f0ddc8;border-radius:8px;margin-bottom:8px;">
@@ -788,7 +857,7 @@ function renderSiteReview(){
 function renderFooter(){
   const el = document.getElementById('site-footer');
   if(!el) return;
-  el.innerHTML = `PowerG — independent gadget launch coverage. Specs and prices are collected from public sources and may change.`;
+  el.innerHTML = `eLoot — independent gadget reviews. Specs and prices are collected from public sources and may change.`;
   el.setAttribute('style','border-top:1px solid #f0ddc8;padding:26px 20px;color:#7a6a5c;font-size:13px;text-align:center;margin-top:20px;display:block;');
 }
 
@@ -796,7 +865,6 @@ function renderFooter(){
 function wireFilterSortBar(){
   const sortSel = document.getElementById('sort-select');
   if(sortSel) sortSel.onchange = (e)=> sortCards(e.target.value);
-  populateAllBrandSelects();
   const brandFilterTop = document.getElementById('filter-brand-select');
   if(brandFilterTop) brandFilterTop.onchange = (e)=> filterByBrand(e.target.value);
 }
@@ -806,21 +874,18 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   renderHeader();
   renderFooter();
 
-  PHONE_DATA = await loadPhoneData();
+  GADGET_DATA = await loadGadgetData();
 
-  renderPhoneDetail();
+  renderProductDetail();
   renderCategoryGrid();
   renderEndlessFeed();
   renderListingFeed();
+  renderCategoryPage();
+  renderSearchPage();
   wireFilterSortBar();
+  populateAllBrandSelects();
   enhanceCards();
   renderSuggestions();
   renderComments();
   renderSiteReview();
-
-  const params = new URLSearchParams(window.location.search);
-  if(params.get('q')) filterCardsByName(params.get('q'));
-  if(params.get('min') || params.get('max')){
-    filterCardsByPrice(parseFloat(params.get('min'))||0, parseFloat(params.get('max'))||Infinity);
-  }
 });
